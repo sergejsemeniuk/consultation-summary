@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Konsultacijų apskaita</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Lora:wght@600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --bg:#F8F7F3;
+    --card:#FFFFFF;
+    --ink:#26332F;
+    --ink-soft:#737B77;
+    --line:#E3E2DC;
+    --accent:#286B5D;
+    --accent-dark:#1F5148;
+    --accent-tint:#E6F0EC;
+    --danger:#A24A3A;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    min-height:100vh;
+  }
+  .wrap{max-width:1280px;margin:0 auto;padding:32px 40px 80px;}
+  @media(max-width:640px){.wrap{padding:24px 16px 60px;}}
+
+  header{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:36px;flex-wrap:wrap;}
+  header .brand{display:flex;align-items:center;gap:12px;}
+  header img.logo{height:38px;width:auto;}
+  h1{font-family:'Lora',Georgia,serif;font-weight:600;font-size:26px;margin:0 0 3px;color:var(--ink);}
+  .subtitle{color:var(--ink-soft);font-size:13px;margin:0;}
+  .today-row{display:flex;align-items:center;gap:14px;}
+  .today{font-size:13px;color:var(--ink-soft);text-align:right;}
+
+  .stats{display:flex;gap:36px;margin-bottom:32px;flex-wrap:wrap;}
+  .stat .n{font-size:24px;font-weight:600;color:var(--ink);line-height:1.2;}
+  .stat .l{font-size:12px;color:var(--ink-soft);margin-top:2px;}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:24px 28px;margin-bottom:36px;}
+  .card-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;gap:16px;flex-wrap:wrap;}
+  .card-head h2{font-size:19px;margin:0 0 2px;font-weight:600;}
+  .card-head p{margin:0;font-size:13px;color:var(--ink-soft);}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px 20px;}
+  @media(max-width:640px){.grid{grid-template-columns:1fr;}}
+  .field label{display:block;font-size:13px;font-weight:500;color:var(--ink-soft);margin-bottom:6px;}
+  .hint{font-weight:400;color:var(--ink-soft);}
+  input,select,textarea{
+    width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:9px;
+    font-size:14px;font-family:inherit;background:#fff;color:var(--ink);height:44px;
+  }
+  textarea{height:auto;min-height:44px;resize:vertical;}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);}
+  .form-actions{display:flex;justify-content:flex-end;margin-top:20px;}
+
+  button{
+    border:none;border-radius:9px;padding:11px 20px;font-size:14px;font-weight:600;
+    cursor:pointer;font-family:inherit;transition:background .15s,opacity .15s,border-color .15s;
+  }
+  button:disabled{opacity:.5;cursor:default;}
+  .btn-primary{background:var(--accent);color:#fff;}
+  .btn-primary:hover{background:var(--accent-dark);}
+  .btn-secondary{background:#fff;color:var(--accent);border:1px solid var(--line);}
+  .btn-secondary:hover{border-color:var(--accent);}
+  .btn-danger-ghost{background:#fff;color:var(--danger);border:1px solid var(--line);}
+  .btn-danger-ghost:hover{border-color:var(--danger);}
+
+  .list-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
+  .list-head h2{font-size:19px;margin:0;font-weight:600;}
+  .filters{display:flex;gap:10px;flex-wrap:wrap;}
+  .filters select{width:170px;height:40px;}
+  .filters input{width:300px;height:40px;}
+  @media(max-width:640px){.filters select,.filters input{width:100%;}}
+  .toolbar-right{display:flex;align-items:center;gap:12px;}
+
+  .table-scroll{overflow-x:auto;border-top:1px solid var(--line);}
+  table{width:100%;border-collapse:collapse;font-size:14px;}
+  th{text-align:left;color:var(--ink-soft);font-weight:500;font-size:12px;padding:12px 10px;border-bottom:1px solid var(--line);}
+  td{padding:14px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
+  tr:last-child td{border-bottom:none;}
+  tbody tr{cursor:pointer;}
+  tbody tr:hover td{background:#F2F1EC;}
+  .chev{color:var(--ink-soft);}
+
+  .tag{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap;}
+  .tag-Tėvas{background:#E7F1ED;color:#286B5D;}
+  .tag-Vaikas{background:#EAF2F3;color:#3B6B72;}
+  .tag-Mokytojas{background:#F3F0E7;color:#8A7D4E;}
+  .tag-Seminaras{background:#EFEAF2;color:#6B5F82;}
+  .tag-Edukacija{background:#E9EDF2;color:#4F6478;}
+
+  .empty{text-align:center;color:var(--ink-soft);padding:48px 0;font-size:14px;}
+  .err{color:var(--danger);font-size:12px;margin-top:10px;display:none;}
+  .status{font-size:12px;color:var(--ink-soft);}
+  .muted{color:var(--ink-soft);}
+
+  @media(max-width:700px){
+    .table-scroll{overflow-x:visible;border-top:none;}
+    table, thead, tbody, th, td, tr{display:block;}
+    thead{display:none;}
+    tr{border-bottom:1px solid var(--line);padding:14px 0;}
+    tr:last-child{border-bottom:none;}
+    td{border:none;padding:2px 0;}
+    td.mob-primary{font-size:15px;font-weight:600;margin-bottom:4px;}
+    td.mob-meta{color:var(--ink-soft);font-size:13px;}
+    td.mob-hide{display:none;}
+  }
+
+  .modal-backdrop{position:fixed;inset:0;background:rgba(38,51,47,0.35);display:none;align-items:center;justify-content:center;z-index:50;padding:20px;}
+  .modal-backdrop.open{display:flex;}
+  .modal-panel{background:#fff;border-radius:14px;max-width:480px;width:100%;padding:26px 28px;max-height:88vh;overflow-y:auto;}
+  .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;}
+  .modal-close{background:none;border:none;font-size:20px;line-height:1;color:var(--ink-soft);cursor:pointer;padding:2px 4px;}
+  .modal-close:hover{color:var(--ink);}
+  .modal-row{margin-bottom:16px;}
+  .modal-label{display:block;font-size:12px;color:var(--ink-soft);margin-bottom:3px;}
+  .modal-value{font-size:14px;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:22px;}
+
+  #login-screen{max-width:360px;margin:80px auto;text-align:center;}
+  #login-screen img{height:52px;margin-bottom:20px;}
+  #login-screen .card{text-align:left;margin-bottom:0;}
+  #app-screen{display:none;}
+  .divider{display:flex;align-items:center;gap:10px;margin:18px 0;color:var(--ink-soft);font-size:12px;}
+  .divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--line);}
+  .btn-google{width:100%;background:#fff;border:1px solid var(--line);color:var(--ink);display:flex;align-items:center;justify-content:center;gap:10px;}
+  .btn-google:hover{border-color:var(--ink-soft);}
+  .btn-google svg{width:18px;height:18px;}
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <img src="logo.png" alt="Mokyklos logotipas">
+  <div class="card">
+    <h2 style="margin-top:0;">Prisijungimas</h2>
+    <div class="field" style="margin-bottom:12px;">
+      <label for="login-email">El. paštas</label>
+      <input id="login-email" type="email" placeholder="vardas@mokykla.lt">
+    </div>
+    <div class="field" style="margin-bottom:16px;">
+      <label for="login-pass">Slaptažodis</label>
+      <input id="login-pass" type="password" placeholder="••••••••">
+    </div>
+    <button class="btn-primary" id="login-btn" style="width:100%;">Prisijungti</button>
+    <p class="err" id="login-err"></p>
+    <div class="divider">arba</div>
+    <button class="btn-google" id="google-btn" type="button">
+      <svg viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9c1.7-1.56 2.7-3.86 2.7-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.83.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.98v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.95 10.7A5.4 5.4 0 0 1 3.66 9c0-.59.1-1.17.29-1.7V4.97H.98A9 9 0 0 0 0 9c0 1.45.35 2.83.98 4.03l2.97-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .98 4.97l2.97 2.33C4.66 5.17 6.65 3.58 9 3.58z"/></svg>
+      Prisijungti su Google
+    </button>
+  </div>
+</div>
+
+<div id="app-screen">
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <img class="logo" src="logo.png" alt="Mokyklos logotipas">
+      <div>
+        <h1>Konsultacijų apskaita</h1>
+        <p class="subtitle">Mokyklos psichologo konsultacijų registras</p>
+      </div>
+    </div>
+    <div class="today-row">
+      <div class="today" id="today-date"></div>
+      <button class="btn-secondary" id="logout-btn">Atsijungti</button>
+    </div>
+  </header>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <h2>Nauja konsultacija</h2>
+        <p>Užregistruokite naują konsultaciją</p>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="field">
+        <label for="f-name">Vardas pavardė <span class="hint" id="name-hint"></span></label>
+        <input id="f-name" type="text" placeholder="Pvz., Rasa Petraitienė">
+      </div>
+      <div class="field">
+        <label for="f-cat">Kategorija</label>
+        <select id="f-cat">
+          <option>Tėvas</option>
+          <option>Vaikas</option>
+          <option>Mokytojas</option>
+          <option>Seminaras</option>
+          <option>Edukacija</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="f-problem">Problema</label>
+        <select id="f-problem"></select>
+      </div>
+      <div class="field">
+        <label for="f-duration">Trukmė, min</label>
+        <input id="f-duration" type="number" min="0" step="5" placeholder="45">
+      </div>
+      <div class="field">
+        <label for="f-notes">Pastabos</label>
+        <textarea id="f-notes" rows="1" placeholder="Neprivaloma"></textarea>
+      </div>
+      <div class="field">
+        <label for="f-date">Data</label>
+        <input id="f-date" type="date">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn-primary" id="add-btn">+ Pridėti</button>
+    </div>
+    <p class="err" id="form-err">Nurodykite vardą pavardę (išskyrus seminarus ir edukaciją) ir problemą.</p>
+  </div>
+
+  <div class="list-head">
+    <h2>Visi įrašai</h2>
+    <div class="toolbar-right">
+      <span class="status" id="save-status"></span>
+      <button class="btn-secondary" id="export-btn">↓ Eksportuoti į Excel</button>
+    </div>
+  </div>
+  <div class="filters" style="margin-bottom:16px;">
+    <select id="filter-cat">
+      <option value="">Visos kategorijos</option>
+      <option>Tėvas</option>
+      <option>Vaikas</option>
+      <option>Mokytojas</option>
+      <option>Seminaras</option>
+      <option>Edukacija</option>
+    </select>
+    <input id="filter-search" type="text" placeholder="Paieška pagal vardą, problemą ar pastabą">
+  </div>
+  <div class="table-scroll"><div id="table-wrap"></div></div>
+</div>
+</div>
+
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal-panel">
+    <div class="modal-header">
+      <span class="tag" id="m-tag"></span>
+      <button class="modal-close" id="modal-close" aria-label="Uždaryti">×</button>
+    </div>
+
+    <div id="modal-view">
+      <div class="modal-row">
+        <span class="modal-label">Vardas pavardė</span>
+        <span class="modal-value" id="m-name"></span>
+      </div>
+      <div class="modal-row">
+        <span class="modal-label">Problema</span>
+        <span class="modal-value" id="m-problem"></span>
+      </div>
+      <div class="modal-row">
+        <span class="modal-label">Trukmė</span>
+        <span class="modal-value" id="m-duration"></span>
+      </div>
+      <div class="modal-row">
+        <span class="modal-label">Pastabos</span>
+        <span class="modal-value" id="m-notes"></span>
+      </div>
+      <div class="modal-row">
+        <span class="modal-label">Data</span>
+        <span class="modal-value" id="m-date"></span>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-danger-ghost" id="modal-delete-btn">Ištrinti</button>
+        <button class="btn-secondary" id="modal-edit-btn">Redaguoti</button>
+      </div>
+    </div>
+
+    <div id="modal-edit" style="display:none;">
+      <div class="grid">
+        <div class="field">
+          <label for="e-name">Vardas pavardė <span class="hint" id="e-name-hint"></span></label>
+          <input id="e-name" type="text">
+        </div>
+        <div class="field">
+          <label for="e-cat">Kategorija</label>
+          <select id="e-cat">
+            <option>Tėvas</option>
+            <option>Vaikas</option>
+            <option>Mokytojas</option>
+            <option>Seminaras</option>
+            <option>Edukacija</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="e-problem">Problema</label>
+          <select id="e-problem"></select>
+        </div>
+        <div class="field">
+          <label for="e-duration">Trukmė, min</label>
+          <input id="e-duration" type="number" min="0" step="5">
+        </div>
+        <div class="field">
+          <label for="e-notes">Pastabos</label>
+          <textarea id="e-notes" rows="1"></textarea>
+        </div>
+        <div class="field">
+          <label for="e-date">Data</label>
+          <input id="e-date" type="date">
+        </div>
+      </div>
+      <p class="err" id="edit-err">Nurodykite vardą pavardę (išskyrus seminarus ir edukaciją) ir problemą.</p>
+      <div class="modal-actions">
+        <button class="btn-secondary" id="modal-cancel-btn">Atšaukti</button>
+        <button class="btn-primary" id="modal-save-btn">Išsaugoti</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ====== 1. FIREBASE CONFIG ======
+// Įklijuokite savo projekto konfigūraciją iš Firebase Console:
+// Project settings → General → Your apps → SDK setup and configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyCkpXpdD2oRBqy-ZpXLulukQy33lsmxzcM",
+  authDomain: "consultation-summary.firebaseapp.com",
+  projectId: "consultation-summary",
+  storageBucket: "consultation-summary.firebasestorage.app",
+  messagingSenderId: "863104000660",
+  appId: "1:863104000660:web:a8d3a246ad2b94b7d4ca81"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// Tas pats el. paštų sąrašas kaip firestore.rules — čia tik greitam pranešimui
+// vartotojui; tikra duomenų apsauga užtikrinama Firestore taisyklėmis.
+const ALLOWED_EMAILS = ['sergej.semeniuk@gmail.com', 'snezana.kuznecova@gmail.com'];
+
+// ====== 2. PROBLEMŲ KLASIFIKATORIUS ======
+const PROBLEM_GROUPS = [
+  { group: 'I. Emocijų ir elgesio', items: [
+    [10,'Depresiškumas, liūdesys'],[11,'Baimė, nerimas'],[12,'Drovumas, uždarumas'],
+    [13,'Agresyvumas, piktumas'],[14,'Pervargimas'],[15,'Neklusnumas, netinkamas elgesys'],
+    [16,'Melavimas, manipuliavimas'],[17,'Vagiliavimas'],[18,'Pabėgimai'],
+    [19,'Padidinta priklausomybė'],[20,'Piktnaudžiavimas kvaišalais'],[21,'Piktnaudžiavimas žaidimais'],[22,'Kitos']
+  ]},
+  { group: 'II. Bendravimo', items: [
+    [30,'Tėvų (globėjų ir senelių) ir vaikų'],[31,'Mokinių ir mokytojų'],[32,'Bendraamžių'],
+    [33,'Vienišumas'],[34,'Šeimos narių'],[35,'Kitos']
+  ]},
+  { group: 'III. Mokymosi', items: [
+    [40,'Pedagoginis apleistumas'],[41,'Motyvacijos stoka'],[42,'Specialių ugdymo poreikių įvertinimas'],
+    [43,'Brandos įvertinimas'],[44,'Įvertinimas dėl kitų (ne specialiųjų) ugdymo problemų'],
+    [45,'Profesinio pasirinkimo įvertinimas'],[46,'Tėvų (mokytojų) konsultavimas dėl vaiko psichologinio įvertinimo'],
+    [47,'Mokyklos nelankymas']
+  ]},
+  { group: 'IV. Krizės', items: [
+    [50,'Savižudybės krizės save žalojantis elgesys'],[51,'Netektis'],[52,'Skyrybos'],
+    [53,'Socialinis ir/ar psichologinis apleistumas, atskirtis (tėvai užsienyje, nepatenkinti esminiai psichologiniai ar socialiniai vaiko poreikiai)'],
+    [54,'Ligos trauma'],[55,'Adaptacija'],[56,'Kitos']
+  ]},
+  { group: 'V. Smurtas', items: [
+    [60,'Fizinis smurtas'],[61,'Psichologinis smurtas / Patyčios'],[62,'Seksualinė prievarta']
+  ]},
+  { group: 'VI. Klinikinės', items: [
+    [70,'Hiperaktyvumo sutrikimas'],[71,'Neurozės (tikai, enurezė, įkyrumai, ister. reakcijos ir kt.)'],
+    [72,'Depresija'],[73,'Elgesio sutrikimai'],[74,'Fobijos'],[75,'Autizmas'],
+    [76,'Valgymo sutrikimai'],[77,'Nerimo sutrikimai'],[78,'Potrauminio streso sindromas'],
+    [79,'Priklausomybė nuo alkoholio'],[80,'Priklausomybė nuo narkotikų'],
+    [81,'Priklausomybė nuo azartinių, kompiuterinių žaidimų'],[82,'Kitos']
+  ]},
+  { group: 'VII. Asmenybės savęs pažinimo ir augimo', items: [
+    [90,'Savivertė'],[91,'Savęs pažinimas ir saviugda']
+  ]},
+  { group: 'VIII. Kitos', items: [
+    [92,'Metodinė pagalba pedagogams'],[93,'Kita']
+  ]}
+];
+
+function buildProblemSelect(sel){
+  sel.innerHTML = PROBLEM_GROUPS.map(g=>{
+    const opts = g.items.map(([code,name])=>`<option value="${code} — ${escapeAttr(name)}">${code} — ${escapeAttr(name)}</option>`).join('');
+    return `<optgroup label="${escapeAttr(g.group)}">${opts}</optgroup>`;
+  }).join('');
+}
+function escapeAttr(s){ return s.replace(/"/g,'&quot;'); }
+
+const LT_MONTHS = ['sausio','vasario','kovo','balandžio','gegužės','birželio','liepos','rugpjūčio','rugsėjo','spalio','lapkričio','gruodžio'];
+function renderTodayHeader(){
+  const d = new Date();
+  document.getElementById('today-date').textContent = `${d.getDate()} ${LT_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+renderTodayHeader();
+
+// ====== 3. AUTENTIFIKACIJA ======
+const loginScreen = document.getElementById('login-screen');
+const appScreen = document.getElementById('app-screen');
+
+document.getElementById('login-btn').addEventListener('click', async ()=>{
+  const email = document.getElementById('login-email').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  const err = document.getElementById('login-err');
+  err.style.display = 'none';
+  try{
+    await auth.signInWithEmailAndPassword(email, pass);
+  }catch(e){
+    err.textContent = 'Neteisingas el. paštas arba slaptažodis.';
+    err.style.display = 'block';
+  }
+});
+
+document.getElementById('google-btn').addEventListener('click', async ()=>{
+  const err = document.getElementById('login-err');
+  err.style.display = 'none';
+  const provider = new firebase.auth.GoogleAuthProvider();
+  try{
+    await auth.signInWithPopup(provider);
+  }catch(e){
+    if(e.code === 'auth/popup-closed-by-user') return;
+    err.textContent = 'Nepavyko prisijungti su Google.';
+    err.style.display = 'block';
+  }
+});
+
+document.getElementById('logout-btn').addEventListener('click', ()=> auth.signOut());
+
+let unsubscribeSnapshot = null;
+
+auth.onAuthStateChanged(user=>{
+  if(user && ALLOWED_EMAILS.length && !ALLOWED_EMAILS.includes(user.email)){
+    auth.signOut();
+    const err = document.getElementById('login-err');
+    err.textContent = 'Ši paskyra neturi prieigos prie sistemos.';
+    err.style.display = 'block';
+    return;
+  }
+  if(user){
+    loginScreen.style.display = 'none';
+    appScreen.style.display = 'block';
+    attachListener();
+  }else{
+    loginScreen.style.display = 'block';
+    appScreen.style.display = 'none';
+    if(unsubscribeSnapshot){ unsubscribeSnapshot(); unsubscribeSnapshot = null; }
+    records = [];
+  }
+});
+
+// ====== 4. DUOMENYS (FIRESTORE) ======
+let records = [];
+let currentModalId = null;
+const COLLECTION = 'consultations';
+
+function attachListener(){
+  unsubscribeSnapshot = db.collection(COLLECTION).orderBy('date','desc').onSnapshot(snap=>{
+    records = snap.docs.map(doc=>({ id: doc.id, ...doc.data() }));
+    render();
+  }, err=>{
+    statusMsg('Klaida gaunant duomenis', false);
+  });
+}
+
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+document.getElementById('f-date').value = todayStr();
+
+function statusMsg(text, ok=true){
+  const el = document.getElementById('save-status');
+  el.textContent = text;
+  el.style.color = ok ? 'var(--ink-soft)' : 'var(--danger)';
+  setTimeout(()=>{ if(el.textContent===text) el.textContent=''; }, 2000);
+}
+
+function fmtDate(d){
+  const [y,m,day] = d.split('-');
+  return day+'.'+m+'.'+y;
+}
+
+function updateNameHint(){
+  const cat = document.getElementById('f-cat').value;
+  document.getElementById('name-hint').textContent = (cat==='Seminaras' || cat==='Edukacija') ? '(neprivaloma)' : '';
+}
+document.getElementById('f-cat').addEventListener('change', updateNameHint);
+updateNameHint();
+
+function updateEditNameHint(){
+  const cat = document.getElementById('e-cat').value;
+  document.getElementById('e-name-hint').textContent = (cat==='Seminaras' || cat==='Edukacija') ? '(neprivaloma)' : '';
+}
+document.getElementById('e-cat').addEventListener('change', updateEditNameHint);
+
+function render(){
+  const catFilter = document.getElementById('filter-cat').value;
+  const search = document.getElementById('filter-search').value.trim().toLowerCase();
+
+  let list = records.filter(r=>{
+    if(catFilter && r.category!==catFilter) return false;
+    if(search){
+      const hay = (r.name+' '+r.problem+' '+(r.notes||'')).toLowerCase();
+      if(!hay.includes(search)) return false;
+    }
+    return true;
+  });
+
+  const wrap = document.getElementById('table-wrap');
+  if(list.length===0){
+    wrap.innerHTML = '<p class="empty">Įrašų dar nėra. Pridėkite pirmą konsultaciją aukščiau.</p>';
+  } else {
+    let rows = list.map(r=>`
+      <tr data-id="${r.id}">
+        <td class="mob-primary">${escapeHtml(r.name) || '<span class="muted">—</span>'}</td>
+        <td class="mob-meta"><span class="tag tag-${r.category}">${r.category}</span></td>
+        <td>${escapeHtml(r.problem)}</td>
+        <td class="mob-meta">${r.duration ? r.duration+' min' : '<span class="muted">—</span>'}</td>
+        <td class="mob-meta">${fmtDate(r.date)}</td>
+        <td class="chev mob-hide">›</td>
+      </tr>`).join('');
+    wrap.innerHTML = `<table>
+      <thead><tr><th>Vardas pavardė</th><th>Kategorija</th><th>Problema</th><th>Trukmė</th><th>Data</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+    wrap.querySelectorAll('tbody tr').forEach(tr=>{
+      tr.addEventListener('click', ()=>openModal(tr.dataset.id));
+    });
+  }
+
+  const stats = document.getElementById('stats');
+  const total = records.length;
+  const byCat = {};
+  records.forEach(r=> byCat[r.category] = (byCat[r.category]||0)+1);
+  const catLabel = { 'Tėvas':'Tėvai', 'Vaikas':'Vaikai', 'Mokytojas':'Mokytojai', 'Seminaras':'Seminarai', 'Edukacija':'Edukacija' };
+  let html = `<div class="stat"><div class="n">${total}</div><div class="l">Iš viso</div></div>`;
+  ['Tėvas','Vaikas','Mokytojas','Seminaras','Edukacija'].forEach(c=>{
+    if(byCat[c]) html += `<div class="stat"><div class="n">${byCat[c]}</div><div class="l">${catLabel[c]}</div></div>`;
+  });
+  stats.innerHTML = html;
+}
+
+function escapeHtml(s){
+  const d = document.createElement('div');
+  d.textContent = s || '';
+  return d.innerHTML;
+}
+
+async function addRecord(){
+  const name = document.getElementById('f-name').value.trim();
+  const category = document.getElementById('f-cat').value;
+  const problem = document.getElementById('f-problem').value;
+  const duration = document.getElementById('f-duration').value.trim();
+  const notes = document.getElementById('f-notes').value.trim();
+  const date = document.getElementById('f-date').value || todayStr();
+  const err = document.getElementById('form-err');
+
+  if(!problem || ((category!=='Seminaras' && category!=='Edukacija') && !name)){
+    err.style.display = 'block';
+    return;
+  }
+  err.style.display = 'none';
+
+  const addBtn = document.getElementById('add-btn');
+  addBtn.disabled = true;
+  try{
+    await db.collection(COLLECTION).add({
+      name, category, problem,
+      duration: duration ? Number(duration) : null,
+      notes, date,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    document.getElementById('f-name').value='';
+    document.getElementById('f-duration').value='';
+    document.getElementById('f-notes').value='';
+    document.getElementById('f-date').value = todayStr();
+    statusMsg('Išsaugota');
+  }catch(e){
+    statusMsg('Nepavyko išsaugoti', false);
+  }
+  addBtn.disabled = false;
+}
+
+function exportExcel(){
+  if(records.length===0){ statusMsg('Nėra duomenų eksportui', false); return; }
+  const data = records
+    .slice()
+    .sort((a,b)=> a.date.localeCompare(b.date))
+    .map(r=>({
+      'Vardas pavardė': r.name,
+      'Kategorija': r.category,
+      'Problema': r.problem,
+      'Trukmė, min': r.duration || '',
+      'Pastabos': r.notes || '',
+      'Data': fmtDate(r.date)
+    }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  ws['!cols'] = [{wch:20},{wch:12},{wch:45},{wch:16},{wch:30},{wch:12}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Konsultacijos');
+  const fname = 'konsultacijos_' + todayStr() + '.xlsx';
+  XLSX.writeFile(wb, fname);
+}
+
+// ====== 5. detali / redagavimo langas ======
+const backdrop = document.getElementById('modal-backdrop');
+
+function openModal(id){
+  const r = records.find(x=>x.id===id);
+  if(!r) return;
+  currentModalId = id;
+  document.getElementById('m-tag').className = 'tag tag-'+r.category;
+  document.getElementById('m-tag').textContent = r.category;
+  document.getElementById('m-name').textContent = r.name || '—';
+  document.getElementById('m-problem').textContent = r.problem;
+  document.getElementById('m-duration').textContent = r.duration ? r.duration+' min' : '—';
+  document.getElementById('m-notes').textContent = r.notes || '—';
+  document.getElementById('m-date').textContent = fmtDate(r.date);
+  document.getElementById('modal-view').style.display = 'block';
+  document.getElementById('modal-edit').style.display = 'none';
+  backdrop.classList.add('open');
+}
+
+function closeModal(){
+  backdrop.classList.remove('open');
+  currentModalId = null;
+}
+
+function enterEditMode(){
+  const r = records.find(x=>x.id===currentModalId);
+  if(!r) return;
+  document.getElementById('e-name').value = r.name || '';
+  document.getElementById('e-cat').value = r.category;
+  document.getElementById('e-problem').value = r.problem;
+  document.getElementById('e-duration').value = r.duration || '';
+  document.getElementById('e-notes').value = r.notes || '';
+  document.getElementById('e-date').value = r.date;
+  document.getElementById('edit-err').style.display = 'none';
+  updateEditNameHint();
+  document.getElementById('modal-view').style.display = 'none';
+  document.getElementById('modal-edit').style.display = 'block';
+}
+
+async function saveEdit(){
+  const name = document.getElementById('e-name').value.trim();
+  const category = document.getElementById('e-cat').value;
+  const problem = document.getElementById('e-problem').value;
+  const duration = document.getElementById('e-duration').value.trim();
+  const notes = document.getElementById('e-notes').value.trim();
+  const date = document.getElementById('e-date').value || todayStr();
+  const err = document.getElementById('edit-err');
+
+  if(!problem || ((category!=='Seminaras' && category!=='Edukacija') && !name)){
+    err.style.display = 'block';
+    return;
+  }
+  err.style.display = 'none';
+
+  const saveBtn = document.getElementById('modal-save-btn');
+  saveBtn.disabled = true;
+  try{
+    await db.collection(COLLECTION).doc(currentModalId).update({
+      name, category, problem,
+      duration: duration ? Number(duration) : null,
+      notes, date
+    });
+    closeModal();
+    statusMsg('Išsaugota');
+  }catch(e){
+    statusMsg('Nepavyko išsaugoti', false);
+  }
+  saveBtn.disabled = false;
+}
+
+async function deleteFromModal(){
+  if(!confirm('Ištrinti šį įrašą?')) return;
+  try{
+    await db.collection(COLLECTION).doc(currentModalId).delete();
+    closeModal();
+    statusMsg('Ištrinta');
+  }catch(e){
+    statusMsg('Nepavyko ištrinti', false);
+  }
+}
+
+document.getElementById('modal-close').addEventListener('click', closeModal);
+document.getElementById('modal-cancel-btn').addEventListener('click', ()=>{
+  document.getElementById('modal-view').style.display = 'block';
+  document.getElementById('modal-edit').style.display = 'none';
+});
+document.getElementById('modal-edit-btn').addEventListener('click', enterEditMode);
+document.getElementById('modal-save-btn').addEventListener('click', saveEdit);
+document.getElementById('modal-delete-btn').addEventListener('click', deleteFromModal);
+backdrop.addEventListener('click', (e)=>{ if(e.target===backdrop) closeModal(); });
+document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && backdrop.classList.contains('open')) closeModal(); });
+
+document.getElementById('add-btn').addEventListener('click', addRecord);
+document.getElementById('export-btn').addEventListener('click', exportExcel);
+document.getElementById('filter-cat').addEventListener('change', render);
+document.getElementById('filter-search').addEventListener('input', render);
+
+buildProblemSelect(document.getElementById('f-problem'));
+buildProblemSelect(document.getElementById('e-problem'));
+</script>
+</body>
+</html>
